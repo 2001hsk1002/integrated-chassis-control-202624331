@@ -13,7 +13,7 @@ SIM.out_rate = 100;     % [Hz] 출력 저장 레이트
 %   'ode15s' : MATLAB stiff solver (BDF) — 저속/포화 영역에서 안정
 %   'rk4'    : 고정 스텝 4차 Runge-Kutta (3DOF/7DOF/14DOF 본래 방식)
 %   'euler'  : 1차 전진 Euler (bicycle 본래 방식, 학습/비교용)
-SIM.solver        = 'ode45';
+SIM.solver        = 'rk4';
 SIM.solver_RelTol = 1e-3;   % ode* 상대 오차 허용치
 SIM.solver_AbsTol = 1e-5;   % ode* 절대 오차 허용치
 
