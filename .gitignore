@@ -1,0 +1,39 @@
+# MATLAB / Simulink 산출물
+*.asv
+*.autosave
+*.slxc
+*.mexw64
+*.mexa64
+*.mexmaci64
+slprj/
+*.slx.r*
+octave-workspace
+
+# 시뮬레이션 결과 (재현 가능, repo 추적 불요)
+icc-project/data/*.mat
+icc-project/data/scenarios/result_*.mat
+icc-project/data/scenarios/benchmark_*.mat
+icc-project/data/scenarios_export/*_HD/
+icc-project/data/scenarios_export/cm_project/
+icc-project/data/scenarios_export/*.osc
+icc-project/data/scenarios_export/*.xodr
+# icc-project/grade_report.json
+
+# Python / 캐시
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# 학생 fork 산출물 (template 에 들어가더라도 무방)
+**/student_info.local.m

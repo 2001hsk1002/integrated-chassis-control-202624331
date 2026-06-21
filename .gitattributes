@@ -1,0 +1,21 @@
+# Phase D' integrity 보장 — ctrl_signature 가 OS 무관하게 일치하도록
+# MATLAB 소스는 LF 로 정규화. Windows checkout 시에도 working tree LF 유지.
+*.m       text eol=lf
+*.py      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.txt     text eol=lf
+
+# Simulink/MATLAB binary — git LFS 미적용 시 binary 로 처리
+*.slx     binary
+*.slxc    binary
+*.mat     binary
+*.mexw64  binary
+*.mexa64  binary
+*.mexmaci64 binary
+
+# Windows batch 만 CRLF 허용 (Windows shell 가 LF 처리 못 함)
+*.bat     text eol=crlf
+*.cmd     text eol=crlf

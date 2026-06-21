@@ -1,0 +1,236 @@
+name: ICC Term Project Autograder
+
+# ICC Term Project 채점 흐름 — 학생 fork 의 push/PR 마다 실행
+# - 학생이 본인 PC (Campus license MATLAB) 에서 grade.m 실행 → grade_report.json 생성
+# - 학생이 ctrl_*.m + grade_report.json + report.md 함께 commit/push
+# - 본 workflow 는 MATLAB 실행 없이 grade_report.json 의 schema + ctrl_signature 검증
+# - 시나리오별 jq 임계 검증 → Actions Summary 탭에 점수표 + 통과/실패 표시
+# - 강의자/TA 는 표본 5-10% 를 본인 PC 에서 재실행해 무결성 확인 (자세히는 HANDOVER.md)
+#
+# 주: GitHub Classroom 은 2026-05 부로 신규 사용 중단 (gh.io/classroom-sunset)
+#     학생은 본 repo template 의 "Use this template" 로 본인 fork 생성
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  repository_dispatch:
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  autograde:
+    # Classroom bot 의 자체 commit 으로 인한 무한 루프 방지
+    if: github.actor != 'github-classroom[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout submission
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # ctrl_*.m 의 commit history 검토 위해 full clone
+
+      # --------------------------------------------------------
+      # grade_report.json 검증 — MATLAB 실행 없음, 라이선스 불요
+      # --------------------------------------------------------
+      - name: Verify grade_report.json present + schema
+        run: |
+          set -e
+          REPORT=icc-project/grade_report.json
+          if [ ! -f "$REPORT" ]; then
+            echo "::error::grade_report.json missing. Run grade.m locally first:"
+            echo "  matlab -batch \"cd('icc-project'); run('scripts/grade.m')\""
+            echo "Then commit and push the generated icc-project/grade_report.json"
+            exit 1
+          fi
+          echo "=== grade_report.json present ==="
+          # Required fields (Phase D' schema)
+          REQUIRED="quantitative breakdown final_auto ctrl_signature timestamp matlab_version solver_used"
+          for f in $REQUIRED; do
+            if ! jq -e "has(\"$f\")" "$REPORT" > /dev/null; then
+              echo "::error::grade_report.json missing field: $f."
+              echo "Re-run grade.m to regenerate (this field was added in Phase D' schema)."
+              exit 1
+            fi
+          done
+          echo "Required fields OK: $REQUIRED"
+          jq '{quantitative, final_auto, timestamp, matlab_version, solver_used, error_count: ((.errors // []) | length)}' "$REPORT"
+
+      - name: Verify ctrl_signature (anti-tamper)
+        run: |
+          set -e
+          REPORT=icc-project/grade_report.json
+          REPORTED=$(jq -r '.ctrl_signature' "$REPORT")
+          # Recompute SHA256 over 4 ctrl_*.m in fixed order (lateral, longitudinal, vertical, coordinator)
+          # tr -d '\r' 로 CRLF→LF 정규화 (Windows 학생 hash 와 ubuntu runner hash 일치 보장)
+          ACTUAL=$(cat \
+            icc-project/scripts/control/ctrl_lateral.m \
+            icc-project/scripts/control/ctrl_longitudinal.m \
+            icc-project/scripts/control/ctrl_vertical.m \
+            icc-project/scripts/control/ctrl_coordinator.m \
+            | tr -d '\r' | sha256sum | awk '{print $1}')
+          echo "Reported ctrl_signature: $REPORTED"
+          echo "Actual   ctrl_signature: $ACTUAL"
+          if [ "$REPORTED" != "$ACTUAL" ]; then
+            echo "::error::ctrl_signature mismatch. The ctrl_*.m files differ from when grade.m was run."
+            echo "Either: (a) ctrl_*.m was edited after grade.m → re-run grade.m and re-push,"
+            echo "        (b) grade_report.json was hand-edited → academic integrity violation."
+            exit 1
+          fi
+          echo "ctrl_signature verified — grade_report.json matches current ctrl_*.m"
+
+      - name: Show submission metadata
+        run: |
+          echo "=== Submission metadata ==="
+          echo "Commit:       $GITHUB_SHA"
+          echo "Pushed by:    ${GITHUB_ACTOR}"
+          echo "Date:         $(git log -1 --pretty=%aI)"
+          echo ""
+          echo "=== ctrl_*.m last commits ==="
+          for f in icc-project/scripts/control/ctrl_lateral.m \
+                   icc-project/scripts/control/ctrl_longitudinal.m \
+                   icc-project/scripts/control/ctrl_vertical.m \
+                   icc-project/scripts/control/ctrl_coordinator.m; do
+            HASH_DATE=$(git log -1 --pretty='%h %aI' -- "$f" 2>/dev/null || echo "no history")
+            echo "  $f: $HASH_DATE"
+          done
+          echo ""
+          echo "=== grade_report.json reported timestamp ==="
+          jq -r '.timestamp' icc-project/grade_report.json
+
+      # --------------------------------------------------------
+      # 시나리오별 임계 통과 검증 + GitHub Actions Job Summary
+      # GitHub Classroom 신규 가입이 2026-05 부로 중단되어 (gh.io/classroom-sunset),
+      # classroom-resources/* action 대신 단순 bash 로 동일 효과 구현.
+      # --------------------------------------------------------
+      - name: Scenario thresholds + summary
+        id: thresholds
+        run: |
+          set -eu
+          REPORT=icc-project/grade_report.json
+          # sid → threshold/max 정의 (autograding.json 과 일치)
+          declare -A THR=( [A3]=9 [A1]=10 [A4]=6 [A7]=10 [B1]=6 [D1]=5 )
+          declare -A MAX=( [A3]=12 [A1]=15 [A4]=10 [A7]=15 [B1]=10 [D1]=8 )
+          declare -A NAME=( [A3]="A3 Step Steer (ISO 7401)" \
+                            [A1]="A1 ISO 3888-1 DLC" \
+                            [A4]="A4 Steady-State Circular" \
+                            [A7]="A7 Brake-in-Turn" \
+                            [B1]="B1 Straight-Line Braking" \
+                            [D1]="D1 DLC + 0.3g Brake" )
+
+          {
+            echo "## 🤖 ICC Term Project — Auto-grade Result"
+            echo ""
+            STUDENT_NAME=$(jq -r '.student.name // "N/A"' "$REPORT")
+            STUDENT_ID=$(jq -r '.student.student_id // "N/A"' "$REPORT")
+            TS=$(jq -r '.timestamp // "N/A"' "$REPORT")
+            ML=$(jq -r '.matlab_version // "N/A"' "$REPORT")
+            SLV=$(jq -r '.solver_used // "N/A"' "$REPORT")
+            QSCORE=$(jq -r '.quantitative.score // 0' "$REPORT")
+            FAUTO=$(jq -r '.final_auto // 0' "$REPORT")
+            echo "**Student**: $STUDENT_NAME ($STUDENT_ID)  "
+            echo "**Submission**: $TS · MATLAB $ML · solver=$SLV"
+            echo ""
+            echo "| Section | Score |"
+            echo "|---|---|"
+            printf "| Quantitative (auto) | **%.2f / 70.00** |\n" "$QSCORE"
+            printf "| Auto total (after deductions) | **%.2f / 70.00** |\n" "$FAUTO"
+            echo "| Manual (보고서) | TBD / 30.00 |"
+            echo ""
+            echo "### Scenario thresholds"
+            echo ""
+            echo "| sid | scenario | scored | threshold | max | pass |"
+            echo "|---|---|---:|---:|---:|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          PASS_COUNT=0
+          TOTAL_COUNT=6
+          for sid in A3 A1 A4 A7 B1 D1; do
+            SCORED=$(jq -r --arg s "$sid" '[.breakdown[] | select(.sid==$s) | .score] | add // 0' "$REPORT")
+            THRV=${THR[$sid]}
+            MAXV=${MAX[$sid]}
+            # bash arithmetic 은 float 안 되므로 awk 로 비교
+            if awk -v a="$SCORED" -v b="$THRV" 'BEGIN{exit !(a>=b)}'; then
+              PASS="✅"
+              PASS_COUNT=$((PASS_COUNT+1))
+            else
+              PASS="❌"
+            fi
+            printf "| %s | %s | %.2f | %s | %s | %s |\n" "$sid" "${NAME[$sid]}" "$SCORED" "$THRV" "$MAXV" "$PASS" \
+              >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          {
+            echo ""
+            echo "**Scenarios passed**: ${PASS_COUNT} / ${TOTAL_COUNT}"
+            echo ""
+            echo "<details><summary>KPI breakdown (전체)</summary>"
+            echo ""
+            echo '```json'
+            jq '.breakdown' "$REPORT"
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "scenarios_passed=$PASS_COUNT" >> "$GITHUB_OUTPUT"
+          echo "quantitative_score=$QSCORE" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------------
+      # PR comment — 학생/조교 인간 친화 점수표 (PR 일 때만)
+      # --------------------------------------------------------
+      - name: Comment on PR with KPI breakdown
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'icc-project/grade_report.json';
+            if (!fs.existsSync(path)) return;
+            const r = JSON.parse(fs.readFileSync(path));
+            let body = `### 🤖 Auto-grade Result\n`;
+            body += `**Student**: ${r.student?.name || 'N/A'} (${r.student?.student_id || 'N/A'})  \n`;
+            body += `**Timestamp**: ${r.timestamp || 'N/A'}\n\n`;
+            body += `| Section | Score |\n|---|---|\n`;
+            body += `| Quantitative (auto) | **${(r.quantitative?.score ?? 0).toFixed(2)} / 70.00** (${(r.quantitative?.pct ?? 0).toFixed(1)}%) |\n`;
+            body += `| Deductions | -${r.deductions?.amount ?? 0} |\n`;
+            body += `| Auto total | **${(r.final_auto ?? 0).toFixed(2)} / 70.00** |\n`;
+            body += `| Manual (보고서) | TBD / 30.00 |\n\n`;
+            if (r.deductions?.reasons?.length) {
+              body += `**Deductions:**\n` + r.deductions.reasons.map(s => `- ${s}`).join('\n') + '\n\n';
+            }
+            if (r.errors?.length) {
+              body += `**Errors:**\n` + r.errors.map(s => `- \`${s}\``).join('\n') + '\n\n';
+            }
+            if (r.breakdown?.length) {
+              body += `<details><summary>KPI breakdown</summary>\n\n| sid | KPI | value | target | score |\n|---|---|---:|---:|---:|\n`;
+              for (const b of r.breakdown) {
+                const val = (typeof b.value === 'number' && isFinite(b.value)) ? b.value.toFixed(4) : 'N/A';
+                body += `| ${b.sid} | ${b.kpi} | ${val} | ${b.target} | ${b.score.toFixed(2)}/${b.max} |\n`;
+              }
+              body += `\n</details>`;
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      # --------------------------------------------------------
+      # 진단용 — 학생/조교가 artifact 다운로드 가능
+      # --------------------------------------------------------
+      - name: Upload grade_report.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grade-report
+          path: icc-project/grade_report.json
+          if-no-files-found: warn

@@ -1,0 +1,1 @@
+integrated chassis control이라는 새로운 프로젝트를 만들려고해. matlab mcp를 이용해서 모델은 simulink로 만들고 실행파일은 m file로 만들고자 해. 더 나아가 carmaker api를 이용해서 실행하는 프로젝트를 구성하려고 해. 이를 위해서 필요한 subagent, skill, plugin 등을 구성하는 md 파일 구성을 제안해줘

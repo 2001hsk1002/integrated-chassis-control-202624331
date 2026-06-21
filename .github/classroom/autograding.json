@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "name": "A3 Step Steer (ISO 7401, transient response)",
+      "setup": "",
+      "run": "jq -e --arg sid A3 '[.breakdown[] | select(.sid==$sid) | .score] | add >= 9' icc-project/grade_report.json",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 5,
+      "points": 12
+    },
+    {
+      "name": "A1 ISO 3888-1 DLC (lateral handling)",
+      "setup": "",
+      "run": "jq -e --arg sid A1 '[.breakdown[] | select(.sid==$sid) | .score] | add >= 10' icc-project/grade_report.json",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 5,
+      "points": 15
+    },
+    {
+      "name": "A4 Steady-State Circular (understeer characterization)",
+      "setup": "",
+      "run": "jq -e --arg sid A4 '[.breakdown[] | select(.sid==$sid) | .score] | add >= 6' icc-project/grade_report.json",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 5,
+      "points": 10
+    },
+    {
+      "name": "A7 Brake-in-Turn (ESC integration — 핵심)",
+      "setup": "",
+      "run": "jq -e --arg sid A7 '[.breakdown[] | select(.sid==$sid) | .score] | add >= 10' icc-project/grade_report.json",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 5,
+      "points": 15
+    },
+    {
+      "name": "B1 Straight-Line Braking (ABS efficiency)",
+      "setup": "",
+      "run": "jq -e --arg sid B1 '[.breakdown[] | select(.sid==$sid) | .score] | add >= 6' icc-project/grade_report.json",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 5,
+      "points": 10
+    },
+    {
+      "name": "D1 DLC + 0.3g Brake (ICC integration — 핵심)",
+      "setup": "",
+      "run": "jq -e --arg sid D1 '[.breakdown[] | select(.sid==$sid) | .score] | add >= 5' icc-project/grade_report.json",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 5,
+      "points": 8
+    }
+  ]
+}

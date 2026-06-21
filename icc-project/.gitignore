@@ -1,0 +1,43 @@
+# MATLAB
+*.asv
+*.mex*
+slprj/
+*_grt_rtw/
+*_ert_rtw/
+codegen/
+
+# Simulink cache
+*.slxc
+*.slxp
+
+# Simulation data (large files)
+data/*.mat
+data/*.erg
+data/*.csv
+data/*.png
+!data/.gitkeep
+
+# CarMaker
+carmaker_project/SimOutput/
+carmaker_project/Log/
+carmaker_project/Movie/
+*.dat.gz
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+*.m~
+
+# Auto-grade artifacts (CI 가 만들고 학생 commit 안 함)
+# grade_report.json
+data/scenarios/result_*.mat
+data/scenarios/benchmark_*.mat
+data/scenarios_export/
+
+# Student-local outputs
+docs/figures/*.png
+!docs/figures/.gitkeep
